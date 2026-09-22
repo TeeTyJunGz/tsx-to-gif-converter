@@ -266,14 +266,14 @@ export function IconEditor({ initialIcons }: IconEditorProps) {
           </div>
 
           <SliderField
-            label="Animation speed"
-            value={config.speed}
-            min={0.25}
-            max={3}
-            step={0.25}
-            suffix="x"
-            disabled={config.animation === "none"}
-            onChange={(v) => set("speed", v)}
+          label="Animation speed"
+          value={config.speed}
+          min={0.25}
+          max={3}
+          step={0.05}
+          suffix="x"
+          disabled={config.animation === "none"}
+          onChange={(v) => set("speed", v)}
           />
 
           <Separator />
