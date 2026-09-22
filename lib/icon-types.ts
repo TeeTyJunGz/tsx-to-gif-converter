@@ -10,6 +10,10 @@ export interface ElementAnim {
   opacity?: number[]
   /** Keyframe values for the `pathLength` attribute (draw-in effect). */
   pathLength?: number[]
+  /** Keyframe values for a horizontal translate, in SVG user units. */
+  x?: number[]
+  /** Keyframe values for a vertical translate, in SVG user units. */
+  y?: number[]
   /** One full cycle duration in seconds (at speed 1). */
   duration: number
 }

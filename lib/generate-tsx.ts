@@ -73,8 +73,21 @@ function elementOriginalJsx(el: IconElement, speed: number): string {
       `<animate attributeName="stroke-dashoffset" values="${offsets}" dur="${dur}s" repeatCount="indefinite" />`,
     )
   }
-  if (animates.length === 0) return `<${tag} ${attrs} />`
-  return `<${tag} ${attrs}${extraAttrs}>${animates.join("")}</${tag}>`
+
+  const hasTranslate = (anim.x && anim.x.length > 1) || (anim.y && anim.y.length > 1)
+  if (animates.length === 0 && !hasTranslate) return `<${tag} ${attrs} />`
+
+  const element =
+    animates.length === 0 ? `<${tag} ${attrs} />` : `<${tag} ${attrs}${extraAttrs}>${animates.join("")}</${tag}>`
+  if (!hasTranslate) return element
+
+  // A captured `x`/`y` translate (e.g. LayersIcon's bars sliding up and back)
+  // is applied as a wrapping `<g>` transform via `<animateTransform>`,
+  // matching how motion/react animates `x`/`y` via a transform under the hood.
+  const n = Math.max(anim.x?.length ?? 0, anim.y?.length ?? 0)
+  const values = Array.from({ length: n }, (_, i) => `${anim.x?.[i] ?? 0},${anim.y?.[i] ?? 0}`).join(";")
+  const translate = `<animateTransform attributeName="transform" type="translate" values="${values}" dur="${dur}s" repeatCount="indefinite" />`
+  return `<g>${translate}${element}</g>`
 }
 
 /**

@@ -40,6 +40,12 @@ function keyframeAtTimes(times: number[], t: number): { i: number; j: number; f:
   return { i, j, f }
 }
 
+/** Interpolates a numeric keyframe array at loop position `t` (0..1). */
+function sampleKeyframes(values: number[], t: number): number {
+  const { i, j, f } = keyframeAt(values.length, t)
+  return values[i] + (values[j] - values[i]) * f
+}
+
 function trimNum(v: number): string {
   return Number.parseFloat(v.toFixed(3)).toString()
 }
@@ -112,7 +118,18 @@ function buildInner(elements: IconElement[], config: IconConfig, progress: numbe
           const pl = anim.pathLength[ki] + (anim.pathLength[kj] - anim.pathLength[ki]) * f
           extra += ` pathLength="1" stroke-dasharray="1" stroke-dashoffset="${(1 - pl).toFixed(4)}"`
         }
-        return `<${el.type} ${attrs}${extra} />`
+        const shape = `<${el.type} ${attrs}${extra} />`
+
+        // A captured `x`/`y` translate (e.g. LayersIcon's bars sliding up and
+        // back) is applied as a wrapping `<g>` transform rather than an
+        // attribute on the shape itself, matching how motion/react animates
+        // `x`/`y` via a transform under the hood.
+        const hasX = anim.x && anim.x.length > 1
+        const hasY = anim.y && anim.y.length > 1
+        if (!hasX && !hasY) return shape
+        const tx = hasX ? sampleKeyframes(anim.x!, local) : 0
+        const ty = hasY ? sampleKeyframes(anim.y!, local) : 0
+        return `<g transform="translate(${tx.toFixed(3)},${ty.toFixed(3)})">${shape}</g>`
       }
 
       let extra = ""

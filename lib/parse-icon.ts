@@ -48,6 +48,32 @@ function getQuotedProp(s: string, key: string): string | undefined {
   return m?.[1]
 }
 
+/** Reads a `key: 1.5` (or `-9`) scalar number out of an object literal body. */
+function getNumProp(s: string, key: string): number | undefined {
+  const m = s.match(new RegExp(`(?:^|[^\\w])${key}\\s*:\\s*(-?\\d*\\.?\\d+)`))
+  return m ? Number(m[1]) : undefined
+}
+
+/** True when a transition block declares `type: "spring"` (any quote style). */
+function isSpringTransition(s: string): boolean {
+  return /type\s*:\s*["']spring["']/.test(s)
+}
+
+/**
+ * Resolves a cycle duration from one or more candidate text blobs (checked in
+ * order). SVG SMIL can't replay spring physics, so a `type: "spring"`
+ * transition — or any transition with no explicit `duration` at all — falls
+ * back to a fixed default that the speed slider can still scale.
+ */
+function resolveDuration(...texts: string[]): number {
+  if (texts.some(isSpringTransition)) return 0.5
+  for (const t of texts) {
+    const m = t.match(/duration\s*:\s*([\d.]+)/)
+    if (m) return Math.max(0.05, Number(m[1]))
+  }
+  return 0.5
+}
+
 /** Finds the substring starting at an opening `{` through its matching closing brace. */
 function matchBalancedBraces(text: string, start: number): string | undefined {
   let depth = 0
@@ -88,33 +114,123 @@ function resolveVariantsRef(source: string, attrs: string): string {
   const ref = attrs.match(/variants\s*=\s*\{\s*([A-Za-z_$][\w$]*)\s*\}/)
   if (!ref) return attrs
   const block = findConstBlock(source, ref[1])
+  // The `__VARIANTS__:` marker gives `getVariantsStates` an unambiguous way to
+  // relocate this block later; plain substring search (used by the rest of
+  // this file to find nested "animate"/"rotate" keys) still works right
+  // through it since it doesn't care about the marker at all.
+  return block ? `${attrs}\n__VARIANTS__:${block}` : attrs
+}
+
+/**
+ * Resolves a `transition={SomeIdentifier}` reference the same way
+ * `resolveVariantsRef` does for `variants` — so a transition factored out
+ * into a shared `const DEFAULT_TRANSITION = { type: "spring", ... }` reads
+ * the same as if it had been written inline on the tag.
+ */
+function resolveTransitionRef(source: string, attrs: string): string {
+  const ref = attrs.match(/transition\s*=\s*\{\s*([A-Za-z_$][\w$]*)\s*\}/)
+  if (!ref) return attrs
+  const block = findConstBlock(source, ref[1])
   return block ? `${attrs}\n${block}` : attrs
+}
+
+/** Resolves both `variants={Ref}` and `transition={Ref}` external references. */
+function resolvePropRefs(source: string, attrs: string): string {
+  return resolveTransitionRef(source, resolveVariantsRef(source, attrs))
+}
+
+/**
+ * Splits a tag's `variants` object (inline `variants={{ ... }}` or an
+ * external ref already inlined by `resolveVariantsRef`) into its named
+ * states, e.g. `{ normal: { y: 0 }, firstState: { y: -9 }, secondState: { y: 0 } }`
+ * becomes `[{name:"normal",...}, {name:"firstState",...}, {name:"secondState",...}]`.
+ * The "normal" (rest) state, if present, is always ordered first so keyframe
+ * sequences read start-to-end the way the animation actually plays.
+ */
+function getVariantsStates(attrs: string): Array<{ name: string; body: string }> | undefined {
+  const inline = attrs.match(/variants\s*=\s*\{\s*\{/)
+  const block = inline?.index != null ? matchBalancedBraces(attrs, inline.index + inline[0].length - 1) : undefined
+  const outer = block ?? findNamedBlock(attrs, "__VARIANTS__")
+  if (!outer) return undefined
+
+  const inner = outer.slice(1, -1)
+  const states: Array<{ name: string; body: string }> = []
+  const re = /([A-Za-z_$][\w$]*)\s*:\s*\{/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(inner))) {
+    const braceStart = m.index + m[0].length - 1
+    const body = matchBalancedBraces(inner, braceStart)
+    if (body) {
+      states.push({ name: m[1], body })
+      re.lastIndex = braceStart + body.length
+    }
+  }
+  if (states.length < 2) return undefined
+  const normalIdx = states.findIndex((s) => s.name === "normal")
+  return normalIdx > 0 ? [states[normalIdx], ...states.filter((_, i) => i !== normalIdx)] : states
+}
+
+/**
+ * Combines a scalar value spread across sequential variant states (e.g.
+ * `normal: { y: 0 }` → `firstState: { y: -9 }` → `secondState: { y: 0 }`)
+ * into a single keyframe array, in the order the states are declared (with
+ * "normal" first). Requires every state to define the key explicitly — a
+ * partial sequence isn't enough to infer the missing values. A two-state
+ * toggle (e.g. `normal`/`animate`) that doesn't already return to its start
+ * value gets the start value appended so it can loop seamlessly.
+ */
+function keyframesFromVariantStates(
+  states: Array<{ name: string; body: string }>,
+  key: string,
+): number[] | undefined {
+  const vals = states.map((s) => getNumProp(s.body, key))
+  if (vals.some((v) => v === undefined)) return undefined
+  const nums = vals as number[]
+  if (nums.length === 2 && nums[0] !== nums[1]) return [...nums, nums[0]]
+  return nums
 }
 
 /**
  * Captures an element's built-in animation (motion/react variants) so we can
  * replay the *original* motion. We look for keyframe arrays of `d`, `opacity`,
- * and/or `pathLength`, plus the transition `duration`. Returns undefined for
- * static shapes.
+ * `pathLength`, and/or a translate (`x`/`y`), plus the transition `duration`.
+ * Returns undefined for static shapes.
  *
- * `attrs` may already have an external `variants` constant's body appended
- * (see `resolveVariantsRef`) — when it has an "animate" sub-block we read the
+ * `source`/`attrs` are resolved for external `variants`/`transition` refs
+ * (see `resolvePropRefs`) — when there's an "animate" sub-block we read the
  * keyframes and duration from there specifically, since the "normal"/rest
- * state's own numbers would otherwise be picked up first.
+ * state's own numbers would otherwise be picked up first. Sequential named
+ * states (e.g. `normal`/`firstState`/`secondState`, or `normal`/`animate`)
+ * are combined into keyframe arrays by `keyframesFromVariantStates` for
+ * attributes — like a `y` translate — that are expressed as a scalar per
+ * state rather than an inline `key: [...]` array.
  */
-function parseElementAnim(attrs: string): ElementAnim | undefined {
-  const animateBlock = findNamedBlock(attrs, "animate")
-  const primary = animateBlock ?? attrs
-  const d = getStringArray(primary, "d") ?? getStringArray(attrs, "d")
-  const opacity = getNumberArray(primary, "opacity") ?? getNumberArray(attrs, "opacity")
-  const pathLength = getNumberArray(primary, "pathLength") ?? getNumberArray(attrs, "pathLength")
-  if (!d && !opacity && !pathLength) return undefined
-  const durMatch = primary.match(/duration\s*:\s*([\d.]+)/) ?? attrs.match(/duration\s*:\s*([\d.]+)/)
-  const duration = durMatch ? Math.max(0.05, Number(durMatch[1])) : 1
+function parseElementAnim(source: string, attrs: string): ElementAnim | undefined {
+  const resolved = resolvePropRefs(source, attrs)
+  const animateBlock = findNamedBlock(resolved, "animate")
+  const primary = animateBlock ?? resolved
+  const d = getStringArray(primary, "d") ?? getStringArray(resolved, "d")
+  let opacity = getNumberArray(primary, "opacity") ?? getNumberArray(resolved, "opacity")
+  let pathLength = getNumberArray(primary, "pathLength") ?? getNumberArray(resolved, "pathLength")
+  let x: number[] | undefined
+  let y: number[] | undefined
+
+  const states = getVariantsStates(resolved)
+  if (states) {
+    x = keyframesFromVariantStates(states, "x")
+    y = keyframesFromVariantStates(states, "y")
+    opacity = opacity ?? keyframesFromVariantStates(states, "opacity")
+    pathLength = pathLength ?? keyframesFromVariantStates(states, "pathLength")
+  }
+
+  if (!d && !opacity && !pathLength && !x && !y) return undefined
+  const duration = resolveDuration(primary, resolved)
   const anim: ElementAnim = { duration }
   if (d) anim.d = d
   if (opacity) anim.opacity = opacity
   if (pathLength) anim.pathLength = pathLength
+  if (x) anim.x = x
+  if (y) anim.y = y
   return anim
 }
 
@@ -127,16 +243,23 @@ function parseElementAnim(attrs: string): ElementAnim | undefined {
  * so the rotation pivots correctly. Returns undefined when there's no rotate.
  */
 function parseGroupAnim(source: string, attrs: string): GroupAnim | undefined {
-  const resolved = resolveVariantsRef(source, attrs)
+  const resolved = resolvePropRefs(source, attrs)
   const animateBlock = findNamedBlock(resolved, "animate")
   const primary = animateBlock ?? resolved
-  const rotate = getNumberArray(primary, "rotate") ?? getNumberArray(resolved, "rotate")
+  let rotate = getNumberArray(primary, "rotate") ?? getNumberArray(resolved, "rotate")
+
+  // Some icons (e.g. Hourglass's `motion.g`) express rotate as a scalar per
+  // named state — `normal: { rotate: 0 }` / `animate: { rotate: 180 }` —
+  // rather than an inline `rotate: [...]` array.
+  if (!rotate) {
+    const states = getVariantsStates(resolved)
+    if (states) rotate = keyframesFromVariantStates(states, "rotate")
+  }
   if (!rotate || rotate.length < 2) return undefined
 
   const transitionBlock = findNamedBlock(primary, "transition") ?? primary
   const times = getNumberArray(transitionBlock, "times")
-  const durMatch = transitionBlock.match(/duration\s*:\s*([\d.]+)/) ?? primary.match(/duration\s*:\s*([\d.]+)/)
-  const duration = durMatch ? Math.max(0.05, Number(durMatch[1])) : 1
+  const duration = resolveDuration(transitionBlock, primary, resolved)
   const transformOrigin = getQuotedProp(attrs, "transformOrigin") ?? getAttr(attrs, "transform-origin") ?? "50% 50%"
 
   const anim: GroupAnim = { rotate, duration, transformOrigin }
@@ -173,7 +296,7 @@ export function parseIconSource(source: string): ParsedIcon {
     // `resolveVariantsRef` pulls in an externally-declared `variants` constant
     // (e.g. Lucide's `variants={PATH_VARIANTS}`) so it reads the same as an
     // inline variants object.
-    const anim = parseElementAnim(resolveVariantsRef(source, attrs))
+    const anim = parseElementAnim(source, attrs)
     const withAnim = <T extends IconElement>(el: T): T => (anim ? { ...el, anim } : el)
 
     switch (type) {
