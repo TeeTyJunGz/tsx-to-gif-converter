@@ -86,7 +86,16 @@ function buildInner(elements: IconElement[], config: IconConfig, progress: numbe
         if (anim.opacity && anim.opacity.length > 1) {
           const { i: ki, j: kj, f } = keyframeAt(anim.opacity.length, local)
           const o = anim.opacity[ki] + (anim.opacity[kj] - anim.opacity[ki]) * f
-          extra = ` opacity="${o.toFixed(3)}"`
+          extra += ` opacity="${o.toFixed(3)}"`
+        }
+        if (anim.pathLength && anim.pathLength.length > 1) {
+          // pathLength keyframes describe a draw-in fraction (0..1). Normalize the
+          // path to length 1 and drive the dash offset from that fraction so the
+          // same "grows from nothing" motion Lucide's `pathLength` produces shows
+          // up here too, without relying on framer-motion at render time.
+          const { i: ki, j: kj, f } = keyframeAt(anim.pathLength.length, local)
+          const pl = anim.pathLength[ki] + (anim.pathLength[kj] - anim.pathLength[ki]) * f
+          extra += ` pathLength="1" stroke-dasharray="1" stroke-dashoffset="${(1 - pl).toFixed(4)}"`
         }
         return `<${el.type} ${attrs}${extra} />`
       }

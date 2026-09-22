@@ -1,15 +1,19 @@
 {
-  "slug": "check-check",
-  "name": "check-check",
+  "slug": "box",
+  "name": "Box",
   "viewBox": "0 0 24 24",
   "elements": [
     {
       "type": "path",
-      "d": "M2 12 7 17L18 6"
+      "d": "M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
     },
     {
       "type": "path",
-      "d": "M13 16L14.5 17.5L22 10"
+      "d": "m3.3 7 8.7 5 8.7-5"
+    },
+    {
+      "type": "path",
+      "d": "M12 22V12"
     }
   ],
   "config": {

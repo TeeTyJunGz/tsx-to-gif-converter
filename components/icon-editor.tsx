@@ -258,7 +258,7 @@ export function IconEditor({ initialIcons }: IconEditorProps) {
             </Select>
             {config.animation === "original" ? (
               <p className="text-xs text-muted-foreground">
-                Replaying the icon&apos;s built-in motion. This animation is locked and can&apos;t be edited.
+                Replaying the icon&apos;s built-in motion, sped up or slowed down with the slider below.
               </p>
             ) : !supportsOriginal ? (
               <p className="text-xs text-muted-foreground">This icon has no built-in animation to restore.</p>
@@ -272,7 +272,7 @@ export function IconEditor({ initialIcons }: IconEditorProps) {
             max={3}
             step={0.25}
             suffix="x"
-            disabled={config.animation === "none" || config.animation === "original"}
+            disabled={config.animation === "none"}
             onChange={(v) => set("speed", v)}
           />
 

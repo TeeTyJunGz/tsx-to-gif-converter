@@ -8,6 +8,8 @@ export interface ElementAnim {
   d?: string[]
   /** Keyframe values for the `opacity` attribute. */
   opacity?: number[]
+  /** Keyframe values for the `pathLength` attribute (draw-in effect). */
+  pathLength?: number[]
   /** One full cycle duration in seconds (at speed 1). */
   duration: number
 }

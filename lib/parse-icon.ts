@@ -40,20 +40,73 @@ function getNumberArray(s: string, key: string): number[] | undefined {
   return nums.length ? nums : undefined
 }
 
+/** Finds the substring starting at an opening `{` through its matching closing brace. */
+function matchBalancedBraces(text: string, start: number): string | undefined {
+  let depth = 0
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === "{") depth++
+    else if (text[i] === "}") {
+      depth--
+      if (depth === 0) return text.slice(start, i + 1)
+    }
+  }
+  return undefined
+}
+
+/** Extracts the full body of a top-level `const NAME = { ... }` (or `const NAME: Type = { ... }`) declaration. */
+function findConstBlock(source: string, name: string): string | undefined {
+  const m = source.match(new RegExp(`const\\s+${name}\\b[^={]*=\\s*\\{`))
+  if (!m || m.index == null) return undefined
+  const braceIndex = m.index + m[0].length - 1
+  return matchBalancedBraces(source, braceIndex)
+}
+
+/** Extracts a nested `key: { ... }` object body from within a larger block of text. */
+function findNamedBlock(text: string, key: string): string | undefined {
+  const m = text.match(new RegExp(`(?:^|[^\\w])${key}\\s*:\\s*\\{`))
+  if (!m || m.index == null) return undefined
+  const braceIndex = m.index + m[0].length - 1
+  return matchBalancedBraces(text, braceIndex)
+}
+
+/**
+ * Resolves a `variants={SomeIdentifier}` reference on a tag to the referenced
+ * top-level constant's source text, so keyframe extraction can run over it as
+ * if it had been written inline. This is what lets us read icons (like
+ * Lucide's animated set) that factor their `variants` object out into a
+ * separate `const PATH_VARIANTS = { ... }` instead of inlining it in the JSX.
+ */
+function resolveVariantsRef(source: string, attrs: string): string {
+  const ref = attrs.match(/variants\s*=\s*\{\s*([A-Za-z_$][\w$]*)\s*\}/)
+  if (!ref) return attrs
+  const block = findConstBlock(source, ref[1])
+  return block ? `${attrs}\n${block}` : attrs
+}
+
 /**
  * Captures an element's built-in animation (motion/react variants) so we can
- * replay the *original* motion. We look for keyframe arrays of `d` and/or
- * `opacity` and the transition `duration`. Returns undefined for static shapes.
+ * replay the *original* motion. We look for keyframe arrays of `d`, `opacity`,
+ * and/or `pathLength`, plus the transition `duration`. Returns undefined for
+ * static shapes.
+ *
+ * `attrs` may already have an external `variants` constant's body appended
+ * (see `resolveVariantsRef`) — when it has an "animate" sub-block we read the
+ * keyframes and duration from there specifically, since the "normal"/rest
+ * state's own numbers would otherwise be picked up first.
  */
 function parseElementAnim(attrs: string): ElementAnim | undefined {
-  const d = getStringArray(attrs, "d")
-  const opacity = getNumberArray(attrs, "opacity")
-  if (!d && !opacity) return undefined
-  const durMatch = attrs.match(/duration\s*:\s*([\d.]+)/)
+  const animateBlock = findNamedBlock(attrs, "animate")
+  const primary = animateBlock ?? attrs
+  const d = getStringArray(primary, "d") ?? getStringArray(attrs, "d")
+  const opacity = getNumberArray(primary, "opacity") ?? getNumberArray(attrs, "opacity")
+  const pathLength = getNumberArray(primary, "pathLength") ?? getNumberArray(attrs, "pathLength")
+  if (!d && !opacity && !pathLength) return undefined
+  const durMatch = primary.match(/duration\s*:\s*([\d.]+)/) ?? attrs.match(/duration\s*:\s*([\d.]+)/)
   const duration = durMatch ? Math.max(0.05, Number(durMatch[1])) : 1
   const anim: ElementAnim = { duration }
   if (d) anim.d = d
   if (opacity) anim.opacity = opacity
+  if (pathLength) anim.pathLength = pathLength
   return anim
 }
 
@@ -77,7 +130,10 @@ export function parseIconSource(source: string): ParsedIcon {
 
     // Capture any built-in per-element motion (motion/react variant keyframes)
     // so the "Original" animation mode can replay the author's designed motion.
-    const anim = parseElementAnim(attrs)
+    // `resolveVariantsRef` pulls in an externally-declared `variants` constant
+    // (e.g. Lucide's `variants={PATH_VARIANTS}`) so it reads the same as an
+    // inline variants object.
+    const anim = parseElementAnim(resolveVariantsRef(source, attrs))
     const withAnim = <T extends IconElement>(el: T): T => (anim ? { ...el, anim } : el)
 
     switch (type) {

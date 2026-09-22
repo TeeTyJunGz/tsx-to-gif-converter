@@ -42,7 +42,9 @@ function elementJsx(el: IconElement, draw: boolean): string {
 /**
  * Emits the element with its original motion baked in as SMIL `<animate>` — a
  * dependency-free way to reproduce the icon's designed animation in the
- * downloadable component. Static elements fall back to a plain tag.
+ * downloadable component. Static elements fall back to a plain tag. The base
+ * duration is scaled by the speed slider so exported markup matches the
+ * preview 1:1.
  */
 function elementOriginalJsx(el: IconElement, speed: number): string {
   const { tag, attrs } = elementTag(el)
@@ -50,6 +52,7 @@ function elementOriginalJsx(el: IconElement, speed: number): string {
   if (!anim) return `<${tag} ${attrs} />`
   const dur = (anim.duration / Math.max(0.1, speed)).toFixed(2)
   const animates: string[] = []
+  let extraAttrs = ""
   if (anim.d && anim.d.length > 1) {
     animates.push(
       `<animate attributeName="d" values="${anim.d.join(";")}" dur="${dur}s" repeatCount="indefinite" />`,
@@ -60,8 +63,18 @@ function elementOriginalJsx(el: IconElement, speed: number): string {
       `<animate attributeName="opacity" values="${anim.opacity.join(";")}" dur="${dur}s" repeatCount="indefinite" />`,
     )
   }
+  if (anim.pathLength && anim.pathLength.length > 1) {
+    // pathLength keyframes describe a draw-in fraction (0..1). Normalize the
+    // path to length 1 and animate the dash offset instead, since animating
+    // `pathLength` alone has no visual effect without a matching dasharray.
+    extraAttrs = ` pathLength="1" stroke-dasharray="1"`
+    const offsets = anim.pathLength.map((p) => (1 - p).toFixed(4)).join(";")
+    animates.push(
+      `<animate attributeName="stroke-dashoffset" values="${offsets}" dur="${dur}s" repeatCount="indefinite" />`,
+    )
+  }
   if (animates.length === 0) return `<${tag} ${attrs} />`
-  return `<${tag} ${attrs}>${animates.join("")}</${tag}>`
+  return `<${tag} ${attrs}${extraAttrs}>${animates.join("")}</${tag}>`
 }
 
 /**
