@@ -75,60 +75,75 @@ export function parseIconSource(source: string): ParsedIcon {
     const type = m[1]
     const attrs = m[2]
 
+    // Capture any built-in per-element motion (motion/react variant keyframes)
+    // so the "Original" animation mode can replay the author's designed motion.
+    const anim = parseElementAnim(attrs)
+    const withAnim = <T extends IconElement>(el: T): T => (anim ? { ...el, anim } : el)
+
     switch (type) {
       case "path": {
-        const d = getAttr(attrs, "d")
-        if (d) elements.push({ type: "path", d })
+        // Animated paths express `d` as a keyframe array; fall back to the first
+        // keyframe as the static geometry when there's no plain `d` attribute.
+        const d = getAttr(attrs, "d") ?? anim?.d?.[0]
+        if (d) elements.push(withAnim({ type: "path", d }))
         break
       }
       case "line":
-        elements.push({
-          type: "line",
-          x1: num(getAttr(attrs, "x1")),
-          y1: num(getAttr(attrs, "y1")),
-          x2: num(getAttr(attrs, "x2")),
-          y2: num(getAttr(attrs, "y2")),
-        })
+        elements.push(
+          withAnim({
+            type: "line",
+            x1: num(getAttr(attrs, "x1")),
+            y1: num(getAttr(attrs, "y1")),
+            x2: num(getAttr(attrs, "x2")),
+            y2: num(getAttr(attrs, "y2")),
+          }),
+        )
         break
       case "circle":
-        elements.push({
-          type: "circle",
-          cx: num(getAttr(attrs, "cx")),
-          cy: num(getAttr(attrs, "cy")),
-          r: num(getAttr(attrs, "r")),
-        })
+        elements.push(
+          withAnim({
+            type: "circle",
+            cx: num(getAttr(attrs, "cx")),
+            cy: num(getAttr(attrs, "cy")),
+            r: num(getAttr(attrs, "r")),
+          }),
+        )
         break
       case "ellipse":
-        elements.push({
-          type: "ellipse",
-          cx: num(getAttr(attrs, "cx")),
-          cy: num(getAttr(attrs, "cy")),
-          rx: num(getAttr(attrs, "rx")),
-          ry: num(getAttr(attrs, "ry")),
-        })
+        elements.push(
+          withAnim({
+            type: "ellipse",
+            cx: num(getAttr(attrs, "cx")),
+            cy: num(getAttr(attrs, "cy")),
+            rx: num(getAttr(attrs, "rx")),
+            ry: num(getAttr(attrs, "ry")),
+          }),
+        )
         break
       case "rect": {
         const rx = getAttr(attrs, "rx")
         const ry = getAttr(attrs, "ry")
-        elements.push({
-          type: "rect",
-          x: num(getAttr(attrs, "x")),
-          y: num(getAttr(attrs, "y")),
-          width: num(getAttr(attrs, "width")),
-          height: num(getAttr(attrs, "height")),
-          ...(rx != null ? { rx: num(rx) } : {}),
-          ...(ry != null ? { ry: num(ry) } : {}),
-        })
+        elements.push(
+          withAnim({
+            type: "rect",
+            x: num(getAttr(attrs, "x")),
+            y: num(getAttr(attrs, "y")),
+            width: num(getAttr(attrs, "width")),
+            height: num(getAttr(attrs, "height")),
+            ...(rx != null ? { rx: num(rx) } : {}),
+            ...(ry != null ? { ry: num(ry) } : {}),
+          }),
+        )
         break
       }
       case "polyline": {
         const points = getAttr(attrs, "points")
-        if (points) elements.push({ type: "polyline", points })
+        if (points) elements.push(withAnim({ type: "polyline", points }))
         break
       }
       case "polygon": {
         const points = getAttr(attrs, "points")
-        if (points) elements.push({ type: "polygon", points })
+        if (points) elements.push(withAnim({ type: "polygon", points }))
         break
       }
     }
