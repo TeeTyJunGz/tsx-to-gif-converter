@@ -6,6 +6,7 @@ import { Plus, Save, Trash2 } from "lucide-react"
 import {
   DEFAULT_CONFIG,
   EXPORT_SIZES,
+  hasOriginalAnimation,
   type AnimationType,
   type IconConfig,
   type IconRecord,
@@ -91,6 +92,8 @@ export function IconEditor({ initialIcons }: IconEditorProps) {
       />
     )
   }
+
+  const supportsOriginal = hasOriginalAnimation(selected.elements)
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -245,11 +248,21 @@ export function IconEditor({ initialIcons }: IconEditorProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="original" disabled={!supportsOriginal}>
+                  Original (as designed)
+                </SelectItem>
                 <SelectItem value="draw">Draw (line trace)</SelectItem>
                 <SelectItem value="pulse">Pulse (fade)</SelectItem>
                 <SelectItem value="none">None (static)</SelectItem>
               </SelectContent>
             </Select>
+            {config.animation === "original" ? (
+              <p className="text-xs text-muted-foreground">
+                Replaying the icon&apos;s built-in motion. This animation is locked and can&apos;t be edited.
+              </p>
+            ) : !supportsOriginal ? (
+              <p className="text-xs text-muted-foreground">This icon has no built-in animation to restore.</p>
+            ) : null}
           </div>
 
           <SliderField
@@ -259,7 +272,7 @@ export function IconEditor({ initialIcons }: IconEditorProps) {
             max={3}
             step={0.25}
             suffix="x"
-            disabled={config.animation === "none"}
+            disabled={config.animation === "none" || config.animation === "original"}
             onChange={(v) => set("speed", v)}
           />
 

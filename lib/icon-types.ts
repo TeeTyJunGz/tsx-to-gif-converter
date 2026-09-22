@@ -1,4 +1,18 @@
-export type IconElement =
+/**
+ * The icon's own built-in animation, captured from the source when available
+ * (e.g. a motion/react per-element morph). This lets us replay the *original*
+ * motion instead of the generic draw/pulse effects.
+ */
+export interface ElementAnim {
+  /** Keyframe values for the `d` attribute (path morph). */
+  d?: string[]
+  /** Keyframe values for the `opacity` attribute. */
+  opacity?: number[]
+  /** One full cycle duration in seconds (at speed 1). */
+  duration: number
+}
+
+type IconElementBase =
   | { type: "path"; d: string }
   | { type: "line"; x1: number; y1: number; x2: number; y2: number }
   | { type: "circle"; cx: number; cy: number; r: number }
@@ -7,7 +21,14 @@ export type IconElement =
   | { type: "polyline"; points: string }
   | { type: "polygon"; points: string }
 
-export type AnimationType = "none" | "draw" | "pulse"
+export type IconElement = IconElementBase & { anim?: ElementAnim }
+
+export type AnimationType = "none" | "draw" | "pulse" | "original"
+
+/** True when the icon carries at least one element with a captured original animation. */
+export function hasOriginalAnimation(elements: IconElement[]): boolean {
+  return elements.some((el) => el.anim != null)
+}
 export type LineCap = "round" | "butt" | "square"
 export type LineJoin = "round" | "bevel" | "miter"
 

@@ -5,9 +5,44 @@ function triangle(p: number): number {
   return p < 0.5 ? p * 2 : (1 - p) * 2
 }
 
-export function computeLoopDuration(config: IconConfig): number {
-  const base = 2 // seconds at speed 1
+/** Longest built-in cycle among elements, or 0 if none carry an animation. */
+function maxAnimDuration(elements: IconElement[]): number {
+  return elements.reduce((m, el) => Math.max(m, el.anim?.duration ?? 0), 0)
+}
+
+export function computeLoopDuration(config: IconConfig, elements?: IconElement[]): number {
+  // In "original" mode the loop spans the slowest built-in cycle so every
+  // element can complete a whole number of its own cycles (seamless loop).
+  const base = config.animation === "original" && elements ? maxAnimDuration(elements) || 2 : 2
   return base / Math.max(0.1, config.speed)
+}
+
+/** Samples keyframe pair + fraction for `n` evenly-spaced values at loop position `t` (0..1). */
+function keyframeAt(n: number, t: number): { i: number; j: number; f: number } {
+  if (n <= 1) return { i: 0, j: 0, f: 0 }
+  const scaled = Math.min(0.999999, Math.max(0, t)) * (n - 1)
+  const i = Math.floor(scaled)
+  return { i, j: Math.min(n - 1, i + 1), f: scaled - i }
+}
+
+function trimNum(v: number): string {
+  return Number.parseFloat(v.toFixed(3)).toString()
+}
+
+const NUM_RE = /-?\d*\.?\d+(?:e[-+]?\d+)?/gi
+
+/** Interpolates two path `d` strings token-wise; falls back to a swap if shapes differ. */
+function lerpPathD(a: string, b: string, f: number): string {
+  const bNums = b.match(NUM_RE)
+  if (!bNums) return a
+  let k = 0
+  const out = a.replace(NUM_RE, (m) => {
+    const bv = bNums[k] != null ? Number.parseFloat(bNums[k]) : Number.parseFloat(m)
+    k++
+    const av = Number.parseFloat(m)
+    return trimNum(av + (bv - av) * f)
+  })
+  return k === bNums.length ? out : f < 0.5 ? a : b
 }
 
 function baseAttrs(el: IconElement): string {
@@ -31,8 +66,31 @@ function baseAttrs(el: IconElement): string {
 }
 
 function buildInner(elements: IconElement[], config: IconConfig, progress: number): string {
+  const loopMax = config.animation === "original" ? maxAnimDuration(elements) : 0
   return elements
     .map((el, i) => {
+      if (config.animation === "original") {
+        // Replay the element's own captured motion. Each element runs a whole
+        // number of its cycles inside the shared loop, so the loop stays seamless
+        // while faster bars still visibly move faster.
+        const anim = el.anim
+        if (!anim || loopMax <= 0) return `<${el.type} ${baseAttrs(el)} />`
+        const cycles = Math.max(1, Math.round(loopMax / anim.duration))
+        const local = (progress * cycles) % 1
+        let attrs = baseAttrs(el)
+        let extra = ""
+        if (anim.d && anim.d.length > 1 && el.type === "path") {
+          const { i: ki, j: kj, f } = keyframeAt(anim.d.length, local)
+          attrs = `d="${lerpPathD(anim.d[ki], anim.d[kj], f)}"`
+        }
+        if (anim.opacity && anim.opacity.length > 1) {
+          const { i: ki, j: kj, f } = keyframeAt(anim.opacity.length, local)
+          const o = anim.opacity[ki] + (anim.opacity[kj] - anim.opacity[ki]) * f
+          extra = ` opacity="${o.toFixed(3)}"`
+        }
+        return `<${el.type} ${attrs}${extra} />`
+      }
+
       let extra = ""
       if (config.animation === "draw") {
         // pathLength="1" normalizes every shape so a single dash covers it fully,

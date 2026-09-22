@@ -1,0 +1,26 @@
+{
+  "slug": "check-check",
+  "name": "check-check",
+  "viewBox": "0 0 24 24",
+  "elements": [
+    {
+      "type": "path",
+      "d": "M2 12 7 17L18 6"
+    },
+    {
+      "type": "path",
+      "d": "M13 16L14.5 17.5L22 10"
+    }
+  ],
+  "config": {
+    "color": "#fcb8d9",
+    "background": "transparent",
+    "strokeWidth": 2,
+    "size": 96,
+    "speed": 1,
+    "animation": "draw",
+    "lineCap": "round",
+    "lineJoin": "round",
+    "exportSize": 512
+  }
+}

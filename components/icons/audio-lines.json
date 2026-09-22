@@ -9,19 +9,51 @@
     },
     {
       "type": "path",
-      "d": "M6 6v11"
+      "d": "M6 6v11",
+      "anim": {
+        "d": [
+          "M6 6v11",
+          "M6 10v3",
+          "M6 6v11"
+        ],
+        "duration": 1.5
+      }
     },
     {
       "type": "path",
-      "d": "M10 3v18"
+      "d": "M10 3v18",
+      "anim": {
+        "d": [
+          "M10 3v18",
+          "M10 9v5",
+          "M10 3v18"
+        ],
+        "duration": 1
+      }
     },
     {
       "type": "path",
-      "d": "M14 8v7"
+      "d": "M14 8v7",
+      "anim": {
+        "d": [
+          "M14 8v7",
+          "M14 6v11",
+          "M14 8v7"
+        ],
+        "duration": 0.8
+      }
     },
     {
       "type": "path",
-      "d": "M18 5v13"
+      "d": "M18 5v13",
+      "anim": {
+        "d": [
+          "M18 5v13",
+          "M18 7v9",
+          "M18 5v13"
+        ],
+        "duration": 1.5
+      }
     },
     {
       "type": "path",
@@ -34,7 +66,7 @@
     "strokeWidth": 2,
     "size": 96,
     "speed": 1,
-    "animation": "draw",
+    "animation": "original",
     "lineCap": "round",
     "lineJoin": "round",
     "exportSize": 512

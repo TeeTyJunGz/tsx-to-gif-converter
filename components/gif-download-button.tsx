@@ -35,7 +35,7 @@ export function GifDownloadButton({ name, slug, viewBox, elements, config }: Gif
       const size = config.exportSize
       const fps = 25
       const animated = config.animation !== "none"
-      const loop = animated ? computeLoopDuration(config) : 1
+      const loop = animated ? computeLoopDuration(config, elements) : 1
       const frameCount = animated ? Math.max(1, Math.round(fps * loop)) : 1
       const delay = 1000 / fps
       const transparent = !config.background || config.background === "transparent"

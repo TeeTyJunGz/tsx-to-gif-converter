@@ -1,4 +1,4 @@
-import type { IconElement } from "./icon-types"
+import type { ElementAnim, IconElement } from "./icon-types"
 
 export interface ParsedIcon {
   viewBox: string
@@ -24,12 +24,44 @@ function getAttr(attrs: string, name: string): string | undefined {
   return m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5]
 }
 
+/** Reads a `key: ["a", "b", ...]` string array out of a motion variant block. */
+function getStringArray(s: string, key: string): string[] | undefined {
+  const m = s.match(new RegExp(`(?:^|[^a-zA-Z0-9])${key}\\s*:\\s*\\[([^\\]]*)\\]`))
+  if (!m) return undefined
+  const items = [...m[1].matchAll(/["'`]([^"'`]*)["'`]/g)].map((x) => x[1])
+  return items.length ? items : undefined
+}
+
+/** Reads a `key: [1, 0.5, ...]` numeric array out of a motion variant block. */
+function getNumberArray(s: string, key: string): number[] | undefined {
+  const m = s.match(new RegExp(`(?:^|[^a-zA-Z0-9])${key}\\s*:\\s*\\[([^\\]]*)\\]`))
+  if (!m) return undefined
+  const nums = [...m[1].matchAll(/-?\d*\.?\d+/g)].map((x) => Number(x[0]))
+  return nums.length ? nums : undefined
+}
+
 /**
- * Extracts the drawable geometry from pasted Lucide-style icon source.
- *
- * We intentionally keep only the static SVG geometry (paths, lines, etc.) and
- * discard bespoke motion props — animation is re-applied generically by the
- * renderer. This makes ingestion of arbitrary animated icons reliable.
+ * Captures an element's built-in animation (motion/react variants) so we can
+ * replay the *original* motion. We look for keyframe arrays of `d` and/or
+ * `opacity` and the transition `duration`. Returns undefined for static shapes.
+ */
+function parseElementAnim(attrs: string): ElementAnim | undefined {
+  const d = getStringArray(attrs, "d")
+  const opacity = getNumberArray(attrs, "opacity")
+  if (!d && !opacity) return undefined
+  const durMatch = attrs.match(/duration\s*:\s*([\d.]+)/)
+  const duration = durMatch ? Math.max(0.05, Number(durMatch[1])) : 1
+  const anim: ElementAnim = { duration }
+  if (d) anim.d = d
+  if (opacity) anim.opacity = opacity
+  return anim
+}
+
+/**
+ * Extracts the drawable geometry from pasted Lucide-style icon source, plus any
+ * built-in per-element animation (motion/react `variants`). The static geometry
+ * powers the generic draw/pulse effects; the captured animation powers the
+ * "Original" mode so the icon can move exactly as its author designed it.
  */
 export function parseIconSource(source: string): ParsedIcon {
   const vb = source.match(/viewBox\s*=\s*(?:"([^"]+)"|'([^']+)'|\{\s*"([^"]+)"\s*\})/)

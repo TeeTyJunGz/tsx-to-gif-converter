@@ -3,7 +3,7 @@
 import { promises as fs } from "fs"
 import path from "path"
 
-import { DEFAULT_CONFIG, type IconConfig, type IconRecord } from "@/lib/icon-types"
+import { DEFAULT_CONFIG, hasOriginalAnimation, type IconConfig, type IconRecord } from "@/lib/icon-types"
 import { parseIconSource } from "@/lib/parse-icon"
 import { generateIconTsx } from "@/lib/generate-tsx"
 
@@ -15,13 +15,14 @@ const SEED: IconRecord = {
   viewBox: "0 0 24 24",
   elements: [
     { type: "path", d: "M2 10v3" },
-    { type: "path", d: "M6 6v11" },
-    { type: "path", d: "M10 3v18" },
-    { type: "path", d: "M14 8v7" },
-    { type: "path", d: "M18 5v13" },
+    { type: "path", d: "M6 6v11", anim: { d: ["M6 6v11", "M6 10v3", "M6 6v11"], duration: 1.5 } },
+    { type: "path", d: "M10 3v18", anim: { d: ["M10 3v18", "M10 9v5", "M10 3v18"], duration: 1 } },
+    { type: "path", d: "M14 8v7", anim: { d: ["M14 8v7", "M14 6v11", "M14 8v7"], duration: 0.8 } },
+    { type: "path", d: "M18 5v13", anim: { d: ["M18 5v13", "M18 7v9", "M18 5v13"], duration: 1.5 } },
     { type: "path", d: "M22 10v3" },
   ],
-  config: { ...DEFAULT_CONFIG },
+  // Default to the icon's own designed motion.
+  config: { ...DEFAULT_CONFIG, animation: "original" },
 }
 
 async function ensureDir() {
@@ -89,6 +90,18 @@ export async function listIcons(): Promise<IconRecord[]> {
     } catch {
       // Skip malformed files rather than failing the whole list.
     }
+  }
+
+  // Upgrade the starter icon written before original-animation support existed
+  // so it regains its designed motion.
+  const seedIdx = records.findIndex((r) => r.slug === SEED.slug && !hasOriginalAnimation(r.elements))
+  if (seedIdx !== -1) {
+    const upgraded: IconRecord = {
+      ...SEED,
+      config: { ...records[seedIdx].config, animation: "original" },
+    }
+    await writeRecord(upgraded)
+    records[seedIdx] = upgraded
   }
 
   records.sort((a, b) => a.name.localeCompare(b.name))

@@ -9,26 +9,59 @@ export function pascalCase(slug: string): string {
   return name || "Icon"
 }
 
-function elementJsx(el: IconElement, draw: boolean): string {
-  const pl = draw ? " pathLength={1}" : ""
+function elementTag(el: IconElement): { tag: string; attrs: string } {
   switch (el.type) {
     case "path":
-      return `<path d="${el.d}"${pl} />`
+      return { tag: "path", attrs: `d="${el.d}"` }
     case "line":
-      return `<line x1={${el.x1}} y1={${el.y1}} x2={${el.x2}} y2={${el.y2}}${pl} />`
+      return { tag: "line", attrs: `x1={${el.x1}} y1={${el.y1}} x2={${el.x2}} y2={${el.y2}}` }
     case "circle":
-      return `<circle cx={${el.cx}} cy={${el.cy}} r={${el.r}}${pl} />`
+      return { tag: "circle", attrs: `cx={${el.cx}} cy={${el.cy}} r={${el.r}}` }
     case "ellipse":
-      return `<ellipse cx={${el.cx}} cy={${el.cy}} rx={${el.rx}} ry={${el.ry}}${pl} />`
+      return { tag: "ellipse", attrs: `cx={${el.cx}} cy={${el.cy}} rx={${el.rx}} ry={${el.ry}}` }
     case "rect":
-      return `<rect x={${el.x}} y={${el.y}} width={${el.width}} height={${el.height}}${
-        el.rx != null ? ` rx={${el.rx}}` : ""
-      }${el.ry != null ? ` ry={${el.ry}}` : ""}${pl} />`
+      return {
+        tag: "rect",
+        attrs: `x={${el.x}} y={${el.y}} width={${el.width}} height={${el.height}}${
+          el.rx != null ? ` rx={${el.rx}}` : ""
+        }${el.ry != null ? ` ry={${el.ry}}` : ""}`,
+      }
     case "polyline":
-      return `<polyline points="${el.points}"${pl} />`
+      return { tag: "polyline", attrs: `points="${el.points}"` }
     case "polygon":
-      return `<polygon points="${el.points}"${pl} />`
+      return { tag: "polygon", attrs: `points="${el.points}"` }
   }
+}
+
+function elementJsx(el: IconElement, draw: boolean): string {
+  const { tag, attrs } = elementTag(el)
+  const pl = draw ? " pathLength={1}" : ""
+  return `<${tag} ${attrs}${pl} />`
+}
+
+/**
+ * Emits the element with its original motion baked in as SMIL `<animate>` — a
+ * dependency-free way to reproduce the icon's designed animation in the
+ * downloadable component. Static elements fall back to a plain tag.
+ */
+function elementOriginalJsx(el: IconElement, speed: number): string {
+  const { tag, attrs } = elementTag(el)
+  const anim = el.anim
+  if (!anim) return `<${tag} ${attrs} />`
+  const dur = (anim.duration / Math.max(0.1, speed)).toFixed(2)
+  const animates: string[] = []
+  if (anim.d && anim.d.length > 1) {
+    animates.push(
+      `<animate attributeName="d" values="${anim.d.join(";")}" dur="${dur}s" repeatCount="indefinite" />`,
+    )
+  }
+  if (anim.opacity && anim.opacity.length > 1) {
+    animates.push(
+      `<animate attributeName="opacity" values="${anim.opacity.join(";")}" dur="${dur}s" repeatCount="indefinite" />`,
+    )
+  }
+  if (animates.length === 0) return `<${tag} ${attrs} />`
+  return `<${tag} ${attrs}>${animates.join("")}</${tag}>`
 }
 
 /**
@@ -40,9 +73,12 @@ export function generateIconTsx(record: IconRecord): string {
   const c = record.config
   const draw = c.animation === "draw"
   const pulse = c.animation === "pulse"
+  const original = c.animation === "original"
   const cls = `anim-${record.slug}`
   const dur = (2 / Math.max(0.1, c.speed)).toFixed(2)
-  const shapes = record.elements.map((el) => `      ${elementJsx(el, draw)}`).join("\n")
+  const shapes = record.elements
+    .map((el) => `      ${original ? elementOriginalJsx(el, c.speed) : elementJsx(el, draw)}`)
+    .join("\n")
 
   let css = ""
   if (draw) {

@@ -24,7 +24,7 @@ export function IconPreview({ viewBox, elements, config, label }: IconPreviewPro
     const node = ref.current
     if (!node) return
 
-    const loop = computeLoopDuration(config)
+    const loop = computeLoopDuration(config, elements)
     const start = performance.now()
     let raf = 0
 
