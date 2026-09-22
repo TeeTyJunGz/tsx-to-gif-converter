@@ -94,7 +94,7 @@ export async function listIcons(): Promise<IconRecord[]> {
 
   // Upgrade the starter icon written before original-animation support existed
   // so it regains its designed motion.
-  const seedIdx = records.findIndex((r) => r.slug === SEED.slug && !hasOriginalAnimation(r.elements))
+  const seedIdx = records.findIndex((r) => r.slug === SEED.slug && !hasOriginalAnimation(r.elements, r.groupAnim))
   if (seedIdx !== -1) {
     const upgraded: IconRecord = {
       ...SEED,
@@ -122,7 +122,10 @@ export async function addIcon(name: string, source: string): Promise<IconRecord[
     name: trimmedName,
     viewBox: parsed.viewBox,
     elements: parsed.elements,
-    config: { ...DEFAULT_CONFIG },
+    ...(parsed.groupAnim ? { groupAnim: parsed.groupAnim } : {}),
+    // Icons with a captured original animation (per-element or whole-group
+    // rotate) default to replaying it, matching the seed icon's behavior.
+    config: { ...DEFAULT_CONFIG, ...(hasOriginalAnimation(parsed.elements, parsed.groupAnim) ? { animation: "original" } : {}) },
   }
   await writeRecord(record)
   return listIcons()
@@ -133,10 +136,11 @@ export async function saveIconAs(
   viewBox: string,
   elements: IconRecord["elements"],
   config: IconConfig,
+  groupAnim?: IconRecord["groupAnim"],
 ): Promise<IconRecord[]> {
   const trimmedName = name.trim() || "Untitled Copy"
   const slug = await uniqueSlug(slugify(trimmedName))
-  const record: IconRecord = { slug, name: trimmedName, viewBox, elements, config }
+  const record: IconRecord = { slug, name: trimmedName, viewBox, elements, ...(groupAnim ? { groupAnim } : {}), config }
   await writeRecord(record)
   return listIcons()
 }

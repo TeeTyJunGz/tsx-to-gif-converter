@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Download } from "lucide-react"
 import { GIFEncoder, quantize, applyPalette } from "gifenc"
 
-import type { IconConfig, IconElement } from "@/lib/icon-types"
+import type { GroupAnim, IconConfig, IconElement } from "@/lib/icon-types"
 import { computeLoopDuration, renderSvgString } from "@/lib/svg-build"
 import { Button } from "@/components/ui/button"
 
@@ -13,6 +13,7 @@ interface GifDownloadButtonProps {
   slug: string
   viewBox: string
   elements: IconElement[]
+  groupAnim?: GroupAnim
   config: IconConfig
 }
 
@@ -26,7 +27,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
-export function GifDownloadButton({ name, slug, viewBox, elements, config }: GifDownloadButtonProps) {
+export function GifDownloadButton({ name, slug, viewBox, elements, groupAnim, config }: GifDownloadButtonProps) {
   const [exporting, setExporting] = useState(false)
 
   async function handleDownload() {
@@ -35,7 +36,7 @@ export function GifDownloadButton({ name, slug, viewBox, elements, config }: Gif
       const size = config.exportSize
       const fps = 25
       const animated = config.animation !== "none"
-      const loop = animated ? computeLoopDuration(config, elements) : 1
+      const loop = animated ? computeLoopDuration(config, elements, groupAnim) : 1
       const frameCount = animated ? Math.max(1, Math.round(fps * loop)) : 1
       const delay = 1000 / fps
       const transparent = !config.background || config.background === "transparent"
@@ -50,7 +51,7 @@ export function GifDownloadButton({ name, slug, viewBox, elements, config }: Gif
 
       for (let i = 0; i < frameCount; i++) {
         const progress = frameCount === 1 ? 0 : i / frameCount
-        const svg = renderSvgString({ viewBox, elements, config, size, progress })
+        const svg = renderSvgString({ viewBox, elements, config, size, progress, groupAnim })
         const img = await loadImage("data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg))
 
         ctx.clearRect(0, 0, size, size)

@@ -1,4 +1,4 @@
-import type { IconElement, IconRecord } from "./icon-types"
+import type { GroupAnim, IconElement, IconRecord } from "./icon-types"
 
 export function pascalCase(slug: string): string {
   const name = slug
@@ -78,6 +78,26 @@ function elementOriginalJsx(el: IconElement, speed: number): string {
 }
 
 /**
+ * Wraps the icon's shapes in a `<g>` that replays a captured whole-icon rotate
+ * (e.g. Hammer's swing) via SMIL `<animateTransform>`, pivoting around the
+ * same transform-origin the original motion component used. Mirrors
+ * `elementOriginalJsx`'s dependency-free SMIL approach, but for a group
+ * transform instead of a per-element attribute.
+ */
+function wrapGroupOriginalJsx(shapes: string, groupAnim: GroupAnim, speed: number): string {
+  const dur = (groupAnim.duration / Math.max(0.1, speed)).toFixed(2)
+  const keyTimes = groupAnim.times ?? groupAnim.rotate.map((_, i) => i / (groupAnim.rotate.length - 1))
+  const values = groupAnim.rotate.join(";")
+  const animate = `<animateTransform attributeName="transform" type="rotate" values="${values}" keyTimes="${keyTimes
+    .map((t) => t.toFixed(4))
+    .join(";")}" dur="${dur}s" repeatCount="indefinite" />`
+  return `<g style={{ transformOrigin: "${groupAnim.transformOrigin}", transformBox: "fill-box" }}>
+        ${animate}
+${shapes}
+      </g>`
+}
+
+/**
  * Generates a self-contained, dependency-free animated icon component from a
  * record. This is the `.tsx` artifact the user downloads/keeps in the project.
  */
@@ -89,9 +109,12 @@ export function generateIconTsx(record: IconRecord): string {
   const original = c.animation === "original"
   const cls = `anim-${record.slug}`
   const dur = (2 / Math.max(0.1, c.speed)).toFixed(2)
-  const shapes = record.elements
+  let shapes = record.elements
     .map((el) => `      ${original ? elementOriginalJsx(el, c.speed) : elementJsx(el, draw)}`)
     .join("\n")
+  if (original && record.groupAnim) {
+    shapes = `      ${wrapGroupOriginalJsx(shapes.trim(), record.groupAnim, c.speed)}`
+  }
 
   let css = ""
   if (draw) {

@@ -25,11 +25,27 @@ type IconElementBase =
 
 export type IconElement = IconElementBase & { anim?: ElementAnim }
 
+/**
+ * A whole-icon transform animation captured from an outer `<motion.svg>` or
+ * `<motion.g>` wrapper (e.g. a swinging/rotating icon like Lucide's Hammer),
+ * as opposed to `ElementAnim` which morphs a single shape's own attributes.
+ */
+export interface GroupAnim {
+  /** Keyframe values for a `rotate` transform, in degrees. */
+  rotate: number[]
+  /** Normalized (0..1) keyframe timing positions; defaults to evenly spaced. */
+  times?: number[]
+  /** CSS `transform-origin`, e.g. "0% 100%", so rotation swings from the right pivot. */
+  transformOrigin: string
+  /** One full cycle duration in seconds (at speed 1). */
+  duration: number
+}
+
 export type AnimationType = "none" | "draw" | "pulse" | "original"
 
-/** True when the icon carries at least one element with a captured original animation. */
-export function hasOriginalAnimation(elements: IconElement[]): boolean {
-  return elements.some((el) => el.anim != null)
+/** True when the icon carries a captured original animation, per-element or whole-group. */
+export function hasOriginalAnimation(elements: IconElement[], groupAnim?: GroupAnim): boolean {
+  return groupAnim != null || elements.some((el) => el.anim != null)
 }
 export type LineCap = "round" | "butt" | "square"
 export type LineJoin = "round" | "bevel" | "miter"
@@ -56,6 +72,8 @@ export interface IconRecord {
   name: string
   viewBox: string
   elements: IconElement[]
+  /** Whole-icon rotate/transform animation, if the source had one (see `GroupAnim`). */
+  groupAnim?: GroupAnim
   config: IconConfig
 }
 

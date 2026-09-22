@@ -93,7 +93,7 @@ export function IconEditor({ initialIcons }: IconEditorProps) {
     )
   }
 
-  const supportsOriginal = hasOriginalAnimation(selected.elements)
+  const supportsOriginal = hasOriginalAnimation(selected.elements, selected.groupAnim)
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -148,6 +148,7 @@ export function IconEditor({ initialIcons }: IconEditorProps) {
               <IconPreview
                 viewBox={selected.viewBox}
                 elements={selected.elements}
+                groupAnim={selected.groupAnim}
                 config={config}
                 label={selected.name}
               />
@@ -161,6 +162,7 @@ export function IconEditor({ initialIcons }: IconEditorProps) {
             slug={selected.slug}
             viewBox={selected.viewBox}
             elements={selected.elements}
+            groupAnim={selected.groupAnim}
             config={config}
           />
 

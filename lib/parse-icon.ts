@@ -1,8 +1,10 @@
-import type { ElementAnim, IconElement } from "./icon-types"
+import type { ElementAnim, GroupAnim, IconElement } from "./icon-types"
 
 export interface ParsedIcon {
   viewBox: string
   elements: IconElement[]
+  /** Whole-icon rotate animation captured off an outer `<motion.svg>`/`<motion.g>`, if any. */
+  groupAnim?: GroupAnim
 }
 
 function num(v: string | undefined, fallback = 0): number {
@@ -38,6 +40,12 @@ function getNumberArray(s: string, key: string): number[] | undefined {
   if (!m) return undefined
   const nums = [...m[1].matchAll(/-?\d*\.?\d+/g)].map((x) => Number(x[0]))
   return nums.length ? nums : undefined
+}
+
+/** Reads a `key: "value"` (any quote style) out of raw JSX attrs or an object body. */
+function getQuotedProp(s: string, key: string): string | undefined {
+  const m = s.match(new RegExp(`${key}\\s*:\\s*["'\`]([^"'\`]+)["'\`]`))
+  return m?.[1]
 }
 
 /** Finds the substring starting at an opening `{` through its matching closing brace. */
@@ -111,14 +119,46 @@ function parseElementAnim(attrs: string): ElementAnim | undefined {
 }
 
 /**
+ * Captures a whole-icon rotate animation from an outer `<motion.svg>` or
+ * `<motion.g>` wrapper (e.g. Lucide's Hammer, which swings the entire SVG
+ * rather than morphing an individual shape). Looks for a `rotate: [...]`
+ * keyframe array, its `transition.times`/`duration`, and a `transformOrigin`
+ * (via `style={{ transformOrigin: ... }}` or a plain `transform-origin` attr)
+ * so the rotation pivots correctly. Returns undefined when there's no rotate.
+ */
+function parseGroupAnim(source: string, attrs: string): GroupAnim | undefined {
+  const resolved = resolveVariantsRef(source, attrs)
+  const animateBlock = findNamedBlock(resolved, "animate")
+  const primary = animateBlock ?? resolved
+  const rotate = getNumberArray(primary, "rotate") ?? getNumberArray(resolved, "rotate")
+  if (!rotate || rotate.length < 2) return undefined
+
+  const transitionBlock = findNamedBlock(primary, "transition") ?? primary
+  const times = getNumberArray(transitionBlock, "times")
+  const durMatch = transitionBlock.match(/duration\s*:\s*([\d.]+)/) ?? primary.match(/duration\s*:\s*([\d.]+)/)
+  const duration = durMatch ? Math.max(0.05, Number(durMatch[1])) : 1
+  const transformOrigin = getQuotedProp(attrs, "transformOrigin") ?? getAttr(attrs, "transform-origin") ?? "50% 50%"
+
+  const anim: GroupAnim = { rotate, duration, transformOrigin }
+  if (times && times.length === rotate.length) anim.times = times
+  return anim
+}
+
+/**
  * Extracts the drawable geometry from pasted Lucide-style icon source, plus any
- * built-in per-element animation (motion/react `variants`). The static geometry
- * powers the generic draw/pulse effects; the captured animation powers the
- * "Original" mode so the icon can move exactly as its author designed it.
+ * built-in per-element animation (motion/react `variants`) and any whole-icon
+ * rotate animation on an outer `<motion.svg>`/`<motion.g>` wrapper. The static
+ * geometry powers the generic draw/pulse effects; the captured animation powers
+ * the "Original" mode so the icon can move exactly as its author designed it.
  */
 export function parseIconSource(source: string): ParsedIcon {
   const vb = source.match(/viewBox\s*=\s*(?:"([^"]+)"|'([^']+)'|\{\s*"([^"]+)"\s*\})/)
   const viewBox = (vb?.[1] ?? vb?.[2] ?? vb?.[3] ?? "0 0 24 24").trim()
+
+  // The outer wrapper carries the whole-icon rotate animation, if any (e.g.
+  // Lucide's Hammer rotates the entire `<motion.svg>` rather than any one path).
+  const groupTagMatch = source.match(/<motion\.(svg|g)\b([^>]*?)>/)
+  const groupAnim = groupTagMatch ? parseGroupAnim(source, groupTagMatch[2]) : undefined
 
   const elements: IconElement[] = []
   const tagRegex = /<(?:motion\.)?(path|line|circle|ellipse|rect|polyline|polygon)\b([^>]*?)\/?>/g
@@ -205,5 +245,5 @@ export function parseIconSource(source: string): ParsedIcon {
     }
   }
 
-  return { viewBox, elements }
+  return { viewBox, elements, ...(groupAnim ? { groupAnim } : {}) }
 }
