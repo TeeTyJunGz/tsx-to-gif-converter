@@ -77,9 +77,8 @@ function baseAttrs(el: IconElement): string {
     case "ellipse":
       return `cx="${el.cx}" cy="${el.cy}" rx="${el.rx}" ry="${el.ry}"`
     case "rect":
-      return `x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}"${
-        el.rx != null ? ` rx="${el.rx}"` : ""
-      }${el.ry != null ? ` ry="${el.ry}"` : ""}`
+      return `x="${el.x}" y="${el.y}" width="${el.width}" height="${el.height}"${el.rx != null ? ` rx="${el.rx}"` : ""
+        }${el.ry != null ? ` ry="${el.ry}"` : ""}`
     case "polyline":
     case "polygon":
       return `points="${el.points}"`
@@ -158,7 +157,15 @@ function buildInner(elements: IconElement[], config: IconConfig, progress: numbe
       ? keyframeAtTimes(groupAnim.times!, local)
       : keyframeAt(groupAnim.rotate.length, local)
     const deg = groupAnim.rotate[i] + (groupAnim.rotate[j] - groupAnim.rotate[i]) * f
-    return `<g transform="rotate(${deg.toFixed(2)})" style="transform-origin:${groupAnim.transformOrigin};transform-box:fill-box">${shapes}</g>`
+
+    // Calculate slider-scaled duration and add the <animateTransform> for standard SVG renderers
+    const dur = (groupAnim.duration / Math.max(0.1, config.speed)).toFixed(3)
+    const timesAttr = useTimes ? ` keyTimes="${groupAnim.times!.join(';')}"` : ''
+
+    return `<g transform="rotate(${deg.toFixed(2)})" style="transform-origin:${groupAnim.transformOrigin};transform-box:fill-box">
+      <animateTransform attributeName="transform" type="rotate" values="${groupAnim.rotate.join(';')}" dur="${dur}s"${timesAttr} repeatCount="indefinite" />
+      ${shapes}
+    </g>`
   }
 
   return shapes

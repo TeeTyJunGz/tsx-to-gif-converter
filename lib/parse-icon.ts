@@ -255,12 +255,27 @@ function parseGroupAnim(source: string, attrs: string): GroupAnim | undefined {
     const states = getVariantsStates(resolved)
     if (states) rotate = keyframesFromVariantStates(states, "rotate")
   }
+
+  // Close the loop for 2-state rotate animations (e.g., [0, 180] -> [0, 180, 0])
+  if (rotate && rotate.length === 2 && rotate[0] !== rotate[1]) {
+    rotate = [...rotate, rotate[0]];
+  }
+
   if (!rotate || rotate.length < 2) return undefined
 
   const transitionBlock = findNamedBlock(primary, "transition") ?? primary
-  const times = getNumberArray(transitionBlock, "times")
+  let times = getNumberArray(transitionBlock, "times")
+
+  // If we added a 3rd keyframe to rotate but times only has 2, pad times as a safe fallback
+  if (times && times.length === 2 && rotate.length === 3) {
+    times = [...times, 1];
+  }
+
   const duration = resolveDuration(transitionBlock, primary, resolved)
-  const transformOrigin = getQuotedProp(attrs, "transformOrigin") ?? getAttr(attrs, "transform-origin") ?? "50% 50%"
+
+  // Extract transformOrigin from inline style={{ transformOrigin: "..." }}
+  const styleMatch = attrs.match(/style\s*=\s*\{\{\s*.*?transformOrigin\s*:\s*["']([^"']+)["'].*?\s*\}\}/);
+  const transformOrigin = styleMatch?.[1] ?? getQuotedProp(attrs, "transformOrigin") ?? getAttr(attrs, "transform-origin") ?? "50% 50%"
 
   const anim: GroupAnim = { rotate, duration, transformOrigin }
   if (times && times.length === rotate.length) anim.times = times
